@@ -1,7 +1,14 @@
 // require express and other modules
 var express = require('express'),
     app = express(),
-    bodyParser = require('body-parser');
+    bodyParser = require('body-parser'),
+    mongoose = require('mongoose'),
+
+    //  NEW ADDITIONS
+    cookieParser = require('cookie-parser'),
+    session = require('express-session'),
+    passport = require('passport'),
+    LocalStrategy = require('passport-local').Strategy;
 
 // configure bodyParser (for receiving form data)
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -12,15 +19,31 @@ app.use(express.static(__dirname + '/public'));
 // set view engine to hbs (handlebars)
 app.set('view engine', 'hbs');
 
+// middleware for auth
+app.use(cookieParser());
+app.use(session({
+  secret: 'secretkey', // change this!
+  resave: false,
+  saveUninitialized: false
+}));
+app.use(passport.initialize());
+app.use(passport.session());
+
 // require Post model
 var db = require('./models'),
     Post = db.Post;
+    User = db.User;
 
+// passport config
+    passport.use(new LocalStrategy(User.authenticate()));
+    passport.serializeUser(User.serializeUser());
+    passport.deserializeUser(User.deserializeUser());
 
 // HOMEPAGE ROUTE
 
+
 app.get('/', function (req, res) {
-  res.render('index');
+    res.render('index', {user: JSON.stringify(req.user) + " || null"});
 });
 
 
@@ -38,6 +61,10 @@ app.get('/api/posts', function (req, res) {
   });
 });
 
+app.get('/signup', function (req, res) {
+  res.render('signup'); // you can also use res.sendFile
+});
+
 // create new post
 app.post('/api/posts', function (req, res) {
   // create new post with form data (`req.body`)
@@ -51,6 +78,35 @@ app.post('/api/posts', function (req, res) {
       res.json(savedPost);
     }
   });
+});
+//Signup new user
+app.post('/signup', function (req, res) {
+  User.register(new User({ username: req.body.username }), req.body.password,
+    function (err, newUser) {
+      passport.authenticate('local')(req, res, function() {
+        res.send('signed up!!!');
+      });
+    }
+  );
+});
+//show login view
+app.get('/login', function (req, res) {
+  res.render('login'); // you can also use res.sendFile
+});
+
+// log in user
+app.post('/login', passport.authenticate('local'), function (req, res) {
+  console.log(req.user);
+  res.send('logged in!!!'); // sanity check
+  // res.redirect('/'); // preferred!
+});
+
+//log out user
+app.get('/logout', function (req, res) {
+  console.log("BEFORE logout", JSON.stringify(req.user));
+  req.logout();
+  console.log("AFTER logout", JSON.stringify(req.user));
+  res.redirect('/');
 });
 
 // get one post
